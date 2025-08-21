@@ -1,9 +1,10 @@
 package com.careconnect.service.user;
 
+import com.careconnect.exception.UserNotFoundException;
 import com.careconnect.model.entity.User;
 import com.careconnect.model.enums.UserRole;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.exception.UserNotFoundException;
+import com.careconnect.utils.ValidationUtil; 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,28 +23,42 @@ public class UserService {
         if (userRepository.existsByEmail(user.getEmail())) {
             throw new RuntimeException("Email já está em uso");
         }
-        
-        validateDocument(user);
-        
+        validateAndNormalizeDocument(user);  
         return userRepository.save(user);
     }
 
-    private void validateDocument(User user) {
+    private void validateAndNormalizeDocument(User user) {
+        if (user.getTipo() == null) {
+            throw new RuntimeException("Tipo de usuário é obrigatório");
+        }
+
         if (user.getTipo() == UserRole.CLINICA) {
-            if (user.getCnpj() == null || user.getCnpj().isEmpty()) {
+            String raw = user.getCnpj();
+            if (raw == null || raw.isEmpty()) {
                 throw new RuntimeException("CNPJ é obrigatório para clínicas");
             }
-            if (userRepository.existsByCnpj(user.getCnpj())) {
+            if (!ValidationUtil.isValidCNPJ(raw)) {
+                throw new RuntimeException("CNPJ inválido");
+            }
+            String cnpj = ValidationUtil.onlyDigits(raw);
+            if (userRepository.existsByCnpj(cnpj)) {
                 throw new RuntimeException("CNPJ já está em uso");
             }
+            user.setCnpj(cnpj);
             user.setCpf(null);
-        } else {
-            if (user.getCpf() == null || user.getCpf().isEmpty()) {
+        } else { 
+            String raw = user.getCpf();
+            if (raw == null || raw.isEmpty()) {
                 throw new RuntimeException("CPF é obrigatório para pacientes e administradores");
             }
-            if (userRepository.existsByCpf(user.getCpf())) {
+            if (!ValidationUtil.isValidCPF(raw)) {
+                throw new RuntimeException("CPF inválido");
+            }
+            String cpf = ValidationUtil.onlyDigits(raw);
+            if (userRepository.existsByCpf(cpf)) {
                 throw new RuntimeException("CPF já está em uso");
             }
+            user.setCpf(cpf);
             user.setCnpj(null);
         }
     }
@@ -71,10 +86,10 @@ public class UserService {
 
     public User updateUser(Long id, User updatedUser) {
         User existingUser = findById(id);
-        
+
         existingUser.setNome(updatedUser.getNome());
         existingUser.setTelefone(updatedUser.getTelefone());
-        
+
         return userRepository.save(existingUser);
     }
 

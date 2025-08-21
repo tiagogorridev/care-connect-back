@@ -21,10 +21,10 @@ public class User {
     @Column(nullable = false)
     private String senha;
     
-    @Column(unique = true)
+    @Column(unique = true, length = 11)
     private String cpf; // PACIENTE e ADMIN
     
-    @Column(unique = true)
+    @Column(unique = true, length = 14)
     private String cnpj; // CLINICA
     
     private String telefone;
