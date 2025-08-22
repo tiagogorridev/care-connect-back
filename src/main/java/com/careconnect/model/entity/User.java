@@ -18,13 +18,13 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
     
-    @Column(nullable = false)
+    @Column(nullable = false, length = 60)
     private String senha;
     
-    @Column(unique = true)
+    @Column(unique = true, length = 11)
     private String cpf; // PACIENTE e ADMIN
     
-    @Column(unique = true)
+    @Column(unique = true, length = 14)
     private String cnpj; // CLINICA
     
     private String telefone;
