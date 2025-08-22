@@ -4,8 +4,9 @@ import com.careconnect.exception.UserNotFoundException;
 import com.careconnect.model.entity.User;
 import com.careconnect.model.enums.UserRole;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.utils.ValidationUtil; 
+import com.careconnect.utils.ValidationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder; // <<< IMPORTANTE
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,11 +20,23 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder; 
+
     public User createUser(User user) {
         if (userRepository.existsByEmail(user.getEmail())) {
             throw new RuntimeException("Email já está em uso");
         }
-        validateAndNormalizeDocument(user);  
+
+        String rawPassword = user.getSenha();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new RuntimeException("Senha é obrigatória");
+        }
+        if (!isBCryptHash(rawPassword)) {
+            user.setSenha(passwordEncoder.encode(rawPassword));
+        }
+
+        validateAndNormalizeDocument(user);
         return userRepository.save(user);
     }
 
@@ -46,7 +59,7 @@ public class UserService {
             }
             user.setCnpj(cnpj);
             user.setCpf(null);
-        } else { 
+        } else { // PACIENTE / ADMIN
             String raw = user.getCpf();
             if (raw == null || raw.isEmpty()) {
                 throw new RuntimeException("CPF é obrigatório para pacientes e administradores");
@@ -90,6 +103,15 @@ public class UserService {
         existingUser.setNome(updatedUser.getNome());
         existingUser.setTelefone(updatedUser.getTelefone());
 
+        if (updatedUser.getSenha() != null && !updatedUser.getSenha().isBlank()) {
+            String newRaw = updatedUser.getSenha();
+            if (!isBCryptHash(newRaw)) {
+                existingUser.setSenha(passwordEncoder.encode(newRaw));
+            } else {
+                existingUser.setSenha(newRaw);
+            }
+        }
+
         return userRepository.save(existingUser);
     }
 
@@ -100,11 +122,16 @@ public class UserService {
     }
 
     public boolean isValidLogin(String email, String senha) {
-        Optional<User> user = userRepository.findByEmailAndAtivoTrue(email);
-        return user.isPresent() && user.get().getSenha().equals(senha);
+        return userRepository.findByEmailAndAtivoTrue(email)
+                .map(u -> passwordEncoder.matches(senha, u.getSenha())) 
+                .orElse(false);
     }
 
     public Optional<User> findActiveUserByEmail(String email) {
         return userRepository.findByEmailAndAtivoTrue(email);
+    }
+
+    private boolean isBCryptHash(String s) {
+        return s != null && (s.startsWith("$2a$") || s.startsWith("$2b$") || s.startsWith("$2y$"));
     }
 }
